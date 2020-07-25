@@ -74,6 +74,18 @@ CHANGES WITH 246:
           notation when the 0o prefix is used and binary notation if the 0b
           prefix is used.
 
+        * Various command line parameters and configuration file settings that
+          configure key or certificate files now optionally take paths to
+          AF_UNIX sockets in the file system. If configured that way a stream
+          connection is made to the socket and the required data read from
+          it. This is a simple and natural extension to the existing regular
+          file logic, and permits other software to provide keys or
+          certificates via simple IPC services, for example when unencrypted
+          storage on disk is not desired. Specifically, systemd-networkd's
+          Wireguard and MACSEC key file settings as well as
+          systemd-journal-gatewayd's and systemd-journal-remote's PEM
+          key/certificate parameters support this now.
+
         * Unit files, tmpfiles.d/ snippets, sysusers.d/ snippets and other
           configuration files that support specifier expansion learnt six new
           specifiers: %a resolves to the current architecture, %o/%w/%B/%W
@@ -99,6 +111,12 @@ CHANGES WITH 246:
           namespacing. By running a service under this user's UID it might get
           read and even write access to all these otherwise unmappable files,
           which is quite likely a major security problem.
+
+        * nss-mymachines lost support for resolution of users and groups, and
+          now only does resolution of hostnames. This functionality is now
+          provided by nss-systemd. Thus, the 'mymachines' entry should be
+          removed from the 'passwd:' and 'group:' lines in /etc/nsswitch.conf
+          (and 'systemd' added if it is not already there).
 
         * A new kernel command line option systemd.hostname= has been added
           that allows controlling the hostname that is initialized early during
@@ -217,6 +235,9 @@ CHANGES WITH 246:
           Description"). Support for "MUD" URLs was also added to the LLDP
           stack, configurable in the [LLDP] section in .network files.
 
+        * The Mode= settings in [MACVLAN] and [MACVTAP] now support 'source'
+          mode. Also, the sections now support a new setting SourceMACAddress=.
+
         * systemd-networkd's .netdev files now support a new setting
           VLANProtocol= in the [Bridge] section that allows configuration of
           the VLAN protocol to use.
@@ -256,10 +277,11 @@ CHANGES WITH 246:
           interface. There are new "up" and "down" commands to bring specific
           interfaces up or down.
 
-        * systemd-resolved's DNS= configuration option now optionally accepts
-          DNS server addresses suffixed by "#" followed by a host name. If
-          used, the DNS-over-TLS certificate is validated to match the
-          specified hostname.
+        * systemd-resolved's DNS= configuration option now optionally accepts a
+          port number (after ":") and a host name (after "#"). When the host
+          name is specified, the DNS-over-TLS certificate is validated to match
+          the specified hostname. Additionally, in case of IPv6 addresses, an
+          interface may be specified (after "%").
 
         * systemd-resolved may be configured to forward single-label DNS names.
           This is not standard-conformant, but may make sense in setups where
@@ -325,6 +347,13 @@ CHANGES WITH 246:
           fields specified with --output-fields= instead of unconditionally
           MESSAGE=. This is useful to retrieve a very specific set of fields
           without any decoration.
+
+        * The sd-journal.h API gained two new functions:
+          sd_journal_enumerate_available_unique() and
+          sd_journal_enumerate_available_data() that operate like their
+          counterparts that lack the _available_ in the name, but skip items
+          that cannot be read and processed by the local implementation
+          (i.e. are compressed in an unsupported format or such),
 
         * coredumpctl gained a new --file= switch, matching the same one in
           journalctl: a specific journal file may be specified to read the
@@ -422,15 +451,6 @@ CHANGES WITH 246:
           control the inode limit for the per-user $XDG_RUNTIME_DIR tmpfs
           instance.
 
-        * systemd-firstboot gained a new --root-password-hashed= parameter for
-          setting the root user's password as UNIX password hash. There's a new
-          --delete-root-password switch which instead of setting a password for
-          the root user, removes it so that log-in without a password is
-          permitted. There's now --force which if specified means any existing
-          configuration is overwritten by the specified settings. It also
-          gained a new --kernel-command-line= parameter which may be used to
-          set the /etc/kernel/cmdline file of an OS image.
-
         * A new generator systemd-xdg-autostart-generator has been added. It
           generates systemd unit files from XDG autostart .desktop files, and
           may be used to let the systemd user instance manage services that are
@@ -444,10 +464,16 @@ CHANGES WITH 246:
           also gained a new switch --root-password-hashed= which is like
           --root-password= but accepts a pre-hashed UNIX password as
           argument. The new option --delete-root-password may be used to unset
-          any password for the root user (dangerous!). A new --force option may
-          be used to override any already set settings with the parameters
-          specified on the command line (by default, the tool will not override
-          what has already been set before, i.e. is purely incremental).
+          any password for the root user (dangerous!). The --root-shell= switch
+          may be used to control the shell to use for the root account. A new
+          --force option may be used to override any already set settings with
+          the parameters specified on the command line (by default, the tool
+          will not override what has already been set before, i.e. is purely
+          incremental).
+
+        * systemd-firstboot gained support for a new --image= switch, which is
+          similar to --root= but accepts the path to a disk image file, on
+          which it then operates.
 
         * A new sd-path.h API has been added to libsystemd. It provides a
           simple API for retrieving various search paths and primary
@@ -520,7 +546,7 @@ CHANGES WITH 246:
           has been extended by a set of environment variables that expose
           select fields from the host's os-release file to the container
           payload. Similarly, host's os-release files can be mounted into the
-          container underneath /run/hosts. Together, those mechanisms provide a
+          container underneath /run/host. Together, those mechanisms provide a
           standardized way to expose information about the host to the
           container payload. Both interfaces are implemented in systemd-nspawn.
 
@@ -528,24 +554,29 @@ CHANGES WITH 246:
           LogControl1 D-Bus API which allows clients to change log level +
           target of the service during runtime.
 
+        * Only relevant for developers: the mkosi.default symlink has been
+          dropped from version control. Please create a symlink to one of the
+          distribution-specific defaults in .mkosi/ based on your preference.
+
         Contributions from: 24bisquitz, Adam Nielsen, Alan Perry, Alexander
-        Malafeev, Alin Popa, Amos Bird, Andreas Rammhold, AndreRH, Andrew
-        Doran, Anita Zhang, Ankit Jain, antznin, Arnaud Ferraris, Arthur Moraes
-        do Lago, Arusekk, Balaji Punnuru, Balint Reczey, Bastien Nocera,
-        bemarek, Benjamin Berg, Benjamin Dahlhoff, Benjamin Robin, Chris Down,
-        Chris Kerr, Christian Göttsche, Christian Hesse, Christian Oder,
-        Ciprian Hacman, codicodi, Corey Hinshaw, Daan De Meyer, Dana Olson, Dan
-        Callaghan, Daniel Fullmer, Daniel Rusek, Dan Streetman, Dave Reisner,
-        David Edmundson, David Wood, Denis Pronin, Diego Escalante Urrelo,
-        Dimitri John Ledkov, dolphrundgren, duguxy, Einsler Lee, Elisei Roca,
-        Emmanuel Garette, Eric Anderson, Eric DeVolder, Evgeny Vereshchagin,
-        ExtinctFire, fangxiuning, Ferran Pallarès Roca, Filipe Brandenburger,
-        Finn, Florian Klink, Franck Bui, Frantisek Sumsal, Gaoyi, gaurav, Georg
-        Müller, Gergely Polonkai, Giedrius Statkevičius, Gigadoc2, gogogogi,
-        gzjsgdsb, Hans de Goede, Haochen Tong, ianhi, ignapk, Jakov Smolic,
-        James T. Lee, Jan Janssen, Jan Klötzke, Jan Palus, Jay Burger, Jeremy
-        Cline, Jérémy Rosen, Jian-Hong Pan, Jiri Slaby, Joel Shapiro, Joerg
-        Behrmann, Jörg Thalheim, Jouke Witteveen, Kai-Heng Feng, Kenny
+        Malafeev, Alin Popa, Alvin Šipraga, Amos Bird, Andreas Rammhold,
+        AndreRH, Andrew Doran, Anita Zhang, Ankit Jain, antznin, Arnaud
+        Ferraris, Arthur Moraes do Lago, Arusekk, Balaji Punnuru, Balint
+        Reczey, Bastien Nocera, bemarek, Benjamin Berg, Benjamin Dahlhoff,
+        Benjamin Robin, Chris Down, Chris Kerr, Christian Göttsche, Christian
+        Hesse, Christian Oder, Ciprian Hacman, Clinton Roy, codicodi, Corey
+        Hinshaw, Daan De Meyer, Dana Olson, Dan Callaghan, Daniel Fullmer,
+        Daniel Rusek, Dan Streetman, Dave Reisner, David Edmundson, David Wood,
+        Denis Pronin, Diego Escalante Urrelo, Dimitri John Ledkov,
+        dolphrundgren, duguxy, Einsler Lee, Elisei Roca, Emmanuel Garette, Eric
+        Anderson, Eric DeVolder, Evgeny Vereshchagin, ExtinctFire, fangxiuning,
+        Ferran Pallarès Roca, Filipe Brandenburger, Filippo Falezza, Finn,
+        Florian Klink, Florian Mayer, Franck Bui, Frantisek Sumsal, gaurav,
+        Georg Müller, Gergely Polonkai, Giedrius Statkevičius, Gigadoc2,
+        gogogogi, gzjsgdsb, Hans de Goede, Haochen Tong, ianhi, ignapk, Jakov
+        Smolic, James T. Lee, Jan Janssen, Jan Klötzke, Jan Palus, Jay Burger,
+        Jeremy Cline, Jérémy Rosen, Jian-Hong Pan, Jiri Slaby, Joel Shapiro,
+        Joerg Behrmann, Jörg Thalheim, Jouke Witteveen, Kai-Heng Feng, Kenny
         Levinsen, Kevin Kuehler, Kumar Kartikeya Dwivedi, layderv, laydervus,
         Lénaïc Huard, Lennart Poettering, Lidong Zhong, Luca Boccassi, Luca
         BRUNO, Lucas Werkmeister, Lukas Klingsbo, Lukáš Nykrýn, Łukasz
@@ -553,19 +584,20 @@ CHANGES WITH 246:
         Holtmann, Marc Kleine-Budde, Martin Hundebøll, Matthew Leeds, Matt
         Ranostay, Maxim Fomin, MaxVerevkin, Michael Biebl, Michael Chapman,
         Michael Gubbels, Michael Marley, Michał Bartoszkiewicz, Michal Koutný,
-        Michal Sekletar, Michal Sekletár, Mike Gilbert, Mike Kazantsev, ml,
+        Michal Sekletár, Mike Gilbert, Mike Kazantsev, Mikhail Novosyolov, ml,
         Motiejus Jakštys, nabijaczleweli, nerdopolis, Niccolò Maggioni, Niklas
         Hambüchen, Norbert Lange, Paul Cercueil, pelzvieh, Peter Hutterer,
         Piero La Terza, Pieter Lexis, Piotr Drąg, Rafael Fontenelle, Richard
         Petri, Ronan Pigott, Ross Lagerwall, Rubens Figueiredo, satmandu,
-        Sean-StarLabs, Sebastian Jennen, sterlinghughes, Susant Sahani, Thomas
-        Haller, Tobias Hunger, Tom, Tomáš Pospíšek, Tomer Shechner, Tom Hughes,
-        Topi Miettinen, Tudor Roman, Uwe Kleine-König, Valery0xff, Vito Caputo,
-        Vladimir Panteleev, Vladyslav Tronko, Wen Yang, Yegor Vialov, Yigal
-        Korman, YmrDtnJu, Yuri Chornoivan, Yu Watanabe, Zbigniew
-        Jędrzejewski-Szmek, Zhu Li, Дамјан Георгиевски, наб
+        Sean-StarLabs, Sebastian Jennen, sterlinghughes, Surhud More, Susant
+        Sahani, szb512, Thomas Haller, Tobias Hunger, Tom, Tomáš Pospíšek,
+        Tomer Shechner, Tom Hughes, Topi Miettinen, Tudor Roman, Uwe
+        Kleine-König, Valery0xff, Vito Caputo, Vladimir Panteleev, Vladyslav
+        Tronko, Wen Yang, Yegor Vialov, Yigal Korman, Yi Gao, YmrDtnJu, Yuri
+        Chornoivan, Yu Watanabe, Zbigniew Jędrzejewski-Szmek, Zhu Li, Дамјан
+        Георгиевски, наб
 
-        – Warsaw, 2020-07-09
+        – Warsaw, 2020-07-24
 
 CHANGES WITH 245:
 

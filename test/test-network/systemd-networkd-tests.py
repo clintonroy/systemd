@@ -557,7 +557,7 @@ class Utilities():
             if i > 0:
                 time.sleep(1)
             output = check_output(f'ip {ipv} address show dev {link} scope {scope}')
-            if re.search(address_regex, output):
+            if re.search(address_regex, output) and 'tentative' not in output:
                 break
         else:
             self.assertRegex(output, address_regex)
@@ -2592,7 +2592,9 @@ class NetworkdStateFileTests(unittest.TestCase, Utilities):
 
         path = os.path.join('/run/systemd/netif/links/', ifindex)
         self.assertTrue(os.path.exists(path))
-        time.sleep(2)
+
+        # make link state file updated
+        check_output(*resolvectl_cmd, 'revert', 'dummy98', env=env)
 
         with open(path) as f:
             data = f.read()
@@ -2601,7 +2603,7 @@ class NetworkdStateFileTests(unittest.TestCase, Utilities):
             self.assertRegex(data, r'REQUIRED_FOR_ONLINE=yes')
             self.assertRegex(data, r'REQUIRED_OPER_STATE_FOR_ONLINE=routable')
             self.assertRegex(data, r'NETWORK_FILE=/run/systemd/network/state-file-tests.network')
-            self.assertRegex(data, r'DNS=10.10.10.10 10.10.10.11')
+            self.assertRegex(data, r'DNS=10.10.10.10#aaa.com 10.10.10.11:1111#bbb.com \[1111:2222::3333\]:1234#ccc.com')
             self.assertRegex(data, r'NTP=0.fedora.pool.ntp.org 1.fedora.pool.ntp.org')
             self.assertRegex(data, r'DOMAINS=hogehoge')
             self.assertRegex(data, r'ROUTE_DOMAINS=foofoo')
@@ -2610,17 +2612,16 @@ class NetworkdStateFileTests(unittest.TestCase, Utilities):
             self.assertRegex(data, r'DNSSEC=no')
             self.assertRegex(data, r'ADDRESSES=192.168.(10.10|12.12)/24 192.168.(12.12|10.10)/24')
 
-        check_output(*resolvectl_cmd, 'dns', 'dummy98', '10.10.10.12', '10.10.10.13', env=env)
+        check_output(*resolvectl_cmd, 'dns', 'dummy98', '10.10.10.12#ccc.com', '10.10.10.13', '1111:2222::3333', env=env)
         check_output(*resolvectl_cmd, 'domain', 'dummy98', 'hogehogehoge', '~foofoofoo', env=env)
         check_output(*resolvectl_cmd, 'llmnr', 'dummy98', 'yes', env=env)
         check_output(*resolvectl_cmd, 'mdns', 'dummy98', 'no', env=env)
         check_output(*resolvectl_cmd, 'dnssec', 'dummy98', 'yes', env=env)
         check_output(*timedatectl_cmd, 'ntp-servers', 'dummy98', '2.fedora.pool.ntp.org', '3.fedora.pool.ntp.org', env=env)
-        time.sleep(2)
 
         with open(path) as f:
             data = f.read()
-            self.assertRegex(data, r'DNS=10.10.10.12 10.10.10.13')
+            self.assertRegex(data, r'DNS=10.10.10.12#ccc.com 10.10.10.13 1111:2222::3333')
             self.assertRegex(data, r'NTP=2.fedora.pool.ntp.org 3.fedora.pool.ntp.org')
             self.assertRegex(data, r'DOMAINS=hogehogehoge')
             self.assertRegex(data, r'ROUTE_DOMAINS=foofoofoo')
@@ -2629,11 +2630,10 @@ class NetworkdStateFileTests(unittest.TestCase, Utilities):
             self.assertRegex(data, r'DNSSEC=yes')
 
         check_output(*timedatectl_cmd, 'revert', 'dummy98', env=env)
-        time.sleep(2)
 
         with open(path) as f:
             data = f.read()
-            self.assertRegex(data, r'DNS=10.10.10.12 10.10.10.13')
+            self.assertRegex(data, r'DNS=10.10.10.12#ccc.com 10.10.10.13 1111:2222::3333')
             self.assertRegex(data, r'NTP=0.fedora.pool.ntp.org 1.fedora.pool.ntp.org')
             self.assertRegex(data, r'DOMAINS=hogehogehoge')
             self.assertRegex(data, r'ROUTE_DOMAINS=foofoofoo')
@@ -2642,11 +2642,10 @@ class NetworkdStateFileTests(unittest.TestCase, Utilities):
             self.assertRegex(data, r'DNSSEC=yes')
 
         check_output(*resolvectl_cmd, 'revert', 'dummy98', env=env)
-        time.sleep(2)
 
         with open(path) as f:
             data = f.read()
-            self.assertRegex(data, r'DNS=10.10.10.10 10.10.10.11')
+            self.assertRegex(data, r'DNS=10.10.10.10#aaa.com 10.10.10.11:1111#bbb.com \[1111:2222::3333\]:1234#ccc.com')
             self.assertRegex(data, r'NTP=0.fedora.pool.ntp.org 1.fedora.pool.ntp.org')
             self.assertRegex(data, r'DOMAINS=hogehoge')
             self.assertRegex(data, r'ROUTE_DOMAINS=foofoo')
@@ -3167,6 +3166,12 @@ class NetworkdDHCPClientTests(unittest.TestCase, Utilities):
         print(output)
         self.assertRegex(output, '2600::')
         self.assertNotRegex(output, '192.168.5')
+
+        output = check_output('ip addr show dev veth99')
+        print(output)
+        self.assertRegex(output, '2600::')
+        self.assertNotRegex(output, '192.168.5')
+        self.assertNotRegex(output, 'tentative')
 
         # Confirm that ipv6 token is not set in the kernel
         output = check_output('ip token show dev veth99')

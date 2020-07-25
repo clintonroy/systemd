@@ -664,7 +664,7 @@ static int on_properties_changed(sd_bus_message *m, void *userdata, sd_bus_error
 
         r = sd_bus_message_read(m, "s", &name);
         if (r < 0)
-                return log_error_errno(r, "Failed to read interface name: %m");
+                return bus_log_parse_error(r);
 
         if (!streq_ptr(name, "org.freedesktop.timesync1.Manager"))
                 return 0;
@@ -1062,7 +1062,7 @@ static int run(int argc, char *argv[]) {
 
         r = bus_connect_transport(arg_transport, arg_host, false, &bus);
         if (r < 0)
-                return log_error_errno(r, "Failed to create bus connection: %m");
+                return bus_log_connect_error(r);
 
         return timedatectl_main(bus, argc, argv);
 }

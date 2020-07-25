@@ -380,7 +380,7 @@ static int decode_link(sd_netlink_message *m, LinkInfo *info, char **patterns, b
                 return r;
 
         r = sd_netlink_message_read_strv(m, IFLA_PROP_LIST, IFLA_ALT_IFNAME, &altnames);
-        if (r < 0 && !IN_SET(r, -EOPNOTSUPP, -ENODATA))
+        if (r < 0 && r != -ENODATA)
                 return r;
 
         if (patterns) {
@@ -1486,6 +1486,7 @@ static int link_status_one(
         if (r < 0)
                 return table_log_add_error(r);
 
+        strv_sort(info->alternative_names);
         r = dump_list(table, "Alternative Names:", info->alternative_names);
         if (r < 0)
                 return r;
@@ -1662,7 +1663,7 @@ static int link_status_one(
                 r = table_add_many(table,
                                    TABLE_EMPTY,
                                    TABLE_STRING, "Mode:",
-                                   TABLE_STRING,  bond_mode_to_string(info->mode),
+                                   TABLE_STRING, bond_mode_to_string(info->mode),
                                    TABLE_EMPTY,
                                    TABLE_STRING, "Miimon:",
                                    TABLE_TIMESPAN_MSEC, jiffies_to_usec(info->miimon),

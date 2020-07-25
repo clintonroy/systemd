@@ -100,13 +100,24 @@ typedef struct Link {
         char *lease_file;
         uint32_t original_mtu;
         unsigned dhcp4_messages;
+        unsigned dhcp4_remove_messages;
+        unsigned dhcp6_address_messages;
+        unsigned dhcp6_route_messages;
+        unsigned dhcp6_pd_address_messages;
+        unsigned dhcp6_pd_route_messages;
         bool dhcp4_route_failed:1;
         bool dhcp4_route_retrying:1;
         bool dhcp4_configured:1;
-        bool dhcp6_configured:1;
+        bool dhcp4_address_bind:1;
+        bool dhcp6_address_configured:1;
+        bool dhcp6_route_configured:1;
+        bool dhcp6_pd_address_configured:1;
+        bool dhcp6_pd_route_configured:1;
 
-        unsigned ndisc_messages;
-        bool ndisc_configured;
+        unsigned ndisc_addresses_messages;
+        unsigned ndisc_routes_messages;
+        bool ndisc_addresses_configured:1;
+        bool ndisc_routes_configured:1;
 
         sd_ipv4ll *ipv4ll;
         bool ipv4ll_address:1;
@@ -115,7 +126,6 @@ typedef struct Link {
         bool addresses_ready:1;
         bool neighbors_configured:1;
         bool static_routes_configured:1;
-        bool static_routes_ready:1;
         bool static_nexthops_configured:1;
         bool routing_policy_rules_configured:1;
         bool tc_configured:1;
@@ -153,7 +163,7 @@ typedef struct Link {
         bool stats_updated;
 
         /* All kinds of DNS configuration the user configured via D-Bus */
-        struct in_addr_data *dns;
+        struct in_addr_full **dns;
         unsigned n_dns;
         OrderedSet *search_domains, *route_domains;
 
@@ -198,6 +208,7 @@ int link_update(Link *link, sd_netlink_message *message);
 void link_dirty(Link *link);
 void link_clean(Link *link);
 int link_save(Link *link);
+int link_save_and_clean(Link *link);
 
 int link_carrier_reset(Link *link);
 bool link_has_carrier(Link *link);
@@ -217,7 +228,6 @@ uint32_t link_get_vrf_table(Link *link);
 uint32_t link_get_dhcp_route_table(Link *link);
 uint32_t link_get_ipv6_accept_ra_route_table(Link *link);
 int link_request_set_routes(Link *link);
-int link_request_set_nexthop(Link *link);
 
 int link_reconfigure(Link *link, bool force);
 

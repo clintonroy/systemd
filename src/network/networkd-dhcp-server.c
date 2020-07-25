@@ -61,10 +61,10 @@ static int link_push_uplink_to_dhcp_server(
                         struct in_addr ia;
 
                         /* Only look for IPv4 addresses */
-                        if (link->network->dns[i].family != AF_INET)
+                        if (link->network->dns[i]->family != AF_INET)
                                 continue;
 
-                        ia = link->network->dns[i].address.in;
+                        ia = link->network->dns[i]->address.in;
 
                         /* Never propagate obviously borked data */
                         if (in4_addr_is_null(&ia) || in4_addr_is_localhost(&ia))
@@ -373,7 +373,7 @@ int config_parse_dhcp_server_emit(
                 if (r == -ENOMEM)
                         return log_oom();
                 if (r < 0) {
-                        log_syntax(unit, LOG_ERR, filename, line, r,
+                        log_syntax(unit, LOG_WARNING, filename, line, r,
                                    "Failed to extract word, ignoring: %s", rvalue);
                         return 0;
                 }
@@ -382,7 +382,7 @@ int config_parse_dhcp_server_emit(
 
                 r = in_addr_from_string(AF_INET, w, &a);
                 if (r < 0) {
-                        log_syntax(unit, LOG_ERR, filename, line, r,
+                        log_syntax(unit, LOG_WARNING, filename, line, r,
                                    "Failed to parse %s= address '%s', ignoring: %m", lvalue, w);
                         continue;
                 }

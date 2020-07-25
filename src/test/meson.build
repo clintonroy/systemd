@@ -301,6 +301,12 @@ tests += [
          [],
          []],
 
+        [['src/test/test-offline-passwd.c',
+          'src/shared/offline-passwd.c',
+          'src/shared/offline-passwd.h'],
+         [],
+         []],
+
         [['src/test/test-escape.c'],
          [],
          []],
@@ -665,7 +671,8 @@ tests += [
           libseccomp,
           libselinux,
           libmount,
-          libblkid]],
+          libblkid],
+         '', 'timeout=120'],
 
         [['src/test/test-execute.c'],
          [libcore,

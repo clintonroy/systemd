@@ -608,6 +608,8 @@ evdev:atkbd:dmi:bvn*:bvr*:bd*:svnHP*:pnHP*ProBook*4*:pvr*
 # HP ZBook
 evdev:atkbd:dmi:bvn*:bvr*:bd*:svnHewlett-Packard*:pnHPZBook*:pvr*
 evdev:atkbd:dmi:bvn*:bvr*:bd*:svnHP*:pnHPZBook*:pvr*
+# Elitebook x360 1040 G6
+evdev:atkbd:dmi:bvn*:bvr*:bd*:svnHP:pn*EliteBook*x3601040G6:pvr*
  KEYBOARD_KEY_81=f20                                    # Fn+F8; Microphone mute button, should be micmute
 
 # HP ZBook 15 G2
@@ -1225,6 +1227,11 @@ evdev:atkbd:dmi:bvn*:bvr*:bd*:svnMicro-Star*:pn*PR200*:pvr*
 # MSI Wind U90/U100 generates separate touchpad on/off keycodes so ignore touchpad toggle keycode
 evdev:atkbd:dmi:bvn*:bvr*:bd*:svnMICRO-STAR*:pnU90/U100:*
  KEYBOARD_KEY_e4=reserved
+
+# MSI Prestige15 A10SC specific keycodes. Needed for microphone and screen rotation
+evdev:atkbd:dmi:bvn*:bvr*:bd*:svnMicro-Star*:pn*A10SC*:pvr*
+ KEYBOARD_KEY_f1=f20
+ KEYBOARD_KEY_f2=f21
 
 ###########################################################
 # MSI

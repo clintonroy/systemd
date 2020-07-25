@@ -218,7 +218,7 @@ int link_set_bridge(Link *link) {
                         return log_link_error_errno(link, r, "Could not append IFLA_BRPORT_FAST_LEAVE attribute: %m");
         }
 
-        if (link->network->allow_port_to_be_root >=  0) {
+        if (link->network->allow_port_to_be_root >= 0) {
                 r = sd_netlink_message_append_u8(req, IFLA_BRPORT_PROTECT, link->network->allow_port_to_be_root);
                 if (r < 0)
                         return log_link_error_errno(link, r, "Could not append IFLA_BRPORT_PROTECT attribute: %m");
@@ -326,13 +326,13 @@ int config_parse_bridge_igmp_version(
 
         r = safe_atou8(rvalue, &u);
         if (r < 0) {
-                log_syntax(unit, LOG_ERR, filename, line, r,
+                log_syntax(unit, LOG_WARNING, filename, line, r,
                            "Failed to parse bridge's multicast IGMP version number '%s', ignoring assignment: %m",
                            rvalue);
                 return 0;
         }
         if (!IN_SET(u, 2, 3)) {
-                log_syntax(unit, LOG_ERR, filename, line, 0,
+                log_syntax(unit, LOG_WARNING, filename, line, 0,
                            "Invalid bridge's multicast IGMP version number '%s', ignoring assignment.", rvalue);
                 return 0;
         }

@@ -104,7 +104,7 @@ static int match_prepare_for_sleep(sd_bus_message *message, void *userdata, sd_b
 
         r = sd_bus_message_read(message, "b", &b);
         if (r < 0) {
-                log_debug_errno(r, "Failed to parse PrepareForSleep signal: %m");
+                bus_log_parse_error(r);
                 return 0;
         }
 
@@ -241,7 +241,7 @@ static int manager_udev_process_link(sd_device_monitor *monitor, sd_device *devi
                 return 0;
         }
         if (r > 0) {
-                log_device_debug(device, "Interface is under renaming, wait for the interface to be renamed: %m");
+                log_device_debug(device, "Interface is under renaming, wait for the interface to be renamed.");
                 return 0;
         }
 
@@ -505,7 +505,8 @@ int manager_rtnl_process_route(sd_netlink *rtnl, sd_netlink_message *message, vo
 
                 log_link_debug(link,
                                "%s route: dst: %s%s, src: %s, gw: %s, prefsrc: %s, scope: %s, table: %s, proto: %s, type: %s",
-                               (!route && !link->manager->manage_foreign_routes) || type == RTM_DELROUTE ? "Forgetting" :
+                               (!route && !link->manager->manage_foreign_routes) ? "Ignoring received foreign" :
+                               type == RTM_DELROUTE ? "Forgetting" :
                                route ? "Received remembered" : "Remembering",
                                strna(buf_dst), strempty(buf_dst_prefixlen),
                                strna(buf_src), strna(buf_gw), strna(buf_prefsrc),
@@ -1424,33 +1425,36 @@ static int manager_connect_rtnl(Manager *m) {
         return 0;
 }
 
-static int ordered_set_put_in_addr_data(OrderedSet *s, const struct in_addr_data *address) {
-        char *p;
+static int ordered_set_put_dns_server(OrderedSet *s, int ifindex, struct in_addr_full *dns) {
+        const char *p;
         int r;
 
         assert(s);
-        assert(address);
+        assert(dns);
 
-        r = in_addr_to_string(address->family, &address->address, &p);
-        if (r < 0)
-                return r;
+        if (dns->ifindex != 0 && dns->ifindex != ifindex)
+                return 0;
 
-        r = ordered_set_consume(s, p);
+        p = in_addr_full_to_string(dns);
+        if (!p)
+                return 0;
+
+        r = ordered_set_put_strdup(s, p);
         if (r == -EEXIST)
                 return 0;
 
         return r;
 }
 
-static int ordered_set_put_in_addr_datav(OrderedSet *s, const struct in_addr_data *addresses, unsigned n) {
+static int ordered_set_put_dns_servers(OrderedSet *s, int ifindex, struct in_addr_full **dns, unsigned n) {
         int r, c = 0;
         unsigned i;
 
         assert(s);
-        assert(addresses || n == 0);
+        assert(dns || n == 0);
 
         for (i = 0; i < n; i++) {
-                r = ordered_set_put_in_addr_data(s, addresses+i);
+                r = ordered_set_put_dns_server(s, ifindex, dns[i]);
                 if (r < 0)
                         return r;
 
@@ -1557,7 +1561,10 @@ static int manager_save(Manager *m) {
                         continue;
 
                 /* First add the static configured entries */
-                r = ordered_set_put_in_addr_datav(dns, link->network->dns, link->network->n_dns);
+                if (link->n_dns != (unsigned) -1)
+                        r = ordered_set_put_dns_servers(dns, link->ifindex, link->dns, link->n_dns);
+                else
+                        r = ordered_set_put_dns_servers(dns, link->ifindex, link->network->dns, link->network->n_dns);
                 if (r < 0)
                         return r;
 
@@ -1720,8 +1727,7 @@ static int manager_dirty_handler(sd_event_source *s, void *userdata) {
                 manager_save(m);
 
         SET_FOREACH(link, m->dirty_links, i)
-                if (link_save(link) >= 0)
-                        link_clean(link);
+                (void) link_save_and_clean(link);
 
         return 1;
 }
@@ -1892,7 +1898,7 @@ int manager_start(Manager *m) {
         manager_save(m);
 
         HASHMAP_FOREACH(link, m->links, i)
-                link_save(link);
+                (void) link_save(link);
 
         return 0;
 }
@@ -2030,6 +2036,9 @@ int manager_rtnl_enumerate_routes(Manager *m) {
 
         assert(m);
         assert(m->rtnl);
+
+        if (!m->manage_foreign_routes)
+                return 0;
 
         r = sd_rtnl_message_new_route(m->rtnl, &req, RTM_GETROUTE, 0, 0);
         if (r < 0)

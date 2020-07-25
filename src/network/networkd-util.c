@@ -86,7 +86,7 @@ int config_parse_address_family_with_kernel(
                 if (streq(rvalue, "kernel"))
                         s = ADDRESS_FAMILY_NO;
                 else {
-                        log_syntax(unit, LOG_ERR, filename, line, 0, "Failed to parse IPForward= option, ignoring: %s", rvalue);
+                        log_syntax(unit, LOG_WARNING, filename, line, 0, "Failed to parse IPForward= option, ignoring: %s", rvalue);
                         return 0;
                 }
         }
@@ -117,7 +117,7 @@ int kernel_route_expiration_supported(void) {
 }
 
 static void network_config_hash_func(const NetworkConfigSection *c, struct siphash *state) {
-        siphash24_compress(c->filename, strlen(c->filename), state);
+        siphash24_compress_string(c->filename, state);
         siphash24_compress(&c->line, sizeof(c->line), state);
 }
 

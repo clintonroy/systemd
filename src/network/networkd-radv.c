@@ -211,18 +211,19 @@ int config_parse_prefix(const char *unit,
 
         r = prefix_new_static(network, filename, section_line, &p);
         if (r < 0)
-                return r;
+                return log_oom();
 
         r = in_addr_prefix_from_string(rvalue, AF_INET6, &in6addr, &prefixlen);
         if (r < 0) {
-                log_syntax(unit, LOG_ERR, filename, line, r, "Prefix is invalid, ignoring assignment: %s", rvalue);
+                log_syntax(unit, LOG_WARNING, filename, line, r, "Prefix is invalid, ignoring assignment: %s", rvalue);
                 return 0;
         }
 
-        if (sd_radv_prefix_set_prefix(p->radv_prefix, &in6addr.in6, prefixlen) < 0)
-                return -EADDRNOTAVAIL;
-
-        log_syntax(unit, LOG_INFO, filename, line, r, "Found prefix %s", rvalue);
+        r = sd_radv_prefix_set_prefix(p->radv_prefix, &in6addr.in6, prefixlen);
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r, "Failed to set radv prefix, ignoring assignment: %s", rvalue);
+                return 0;
+        }
 
         p = NULL;
 
@@ -241,7 +242,7 @@ int config_parse_prefix_flags(const char *unit,
                               void *userdata) {
         Network *network = userdata;
         _cleanup_(prefix_free_or_set_invalidp) Prefix *p = NULL;
-        int r, val;
+        int r;
 
         assert(filename);
         assert(section);
@@ -251,22 +252,22 @@ int config_parse_prefix_flags(const char *unit,
 
         r = prefix_new_static(network, filename, section_line, &p);
         if (r < 0)
-                return r;
+                return log_oom();
 
         r = parse_boolean(rvalue);
         if (r < 0) {
-                log_syntax(unit, LOG_ERR, filename, line, r, "Failed to parse address flag, ignoring: %s", rvalue);
+                log_syntax(unit, LOG_WARNING, filename, line, r, "Failed to parse %s=, ignoring assignment: %s", lvalue, rvalue);
                 return 0;
         }
 
-        val = r;
-
         if (streq(lvalue, "OnLink"))
-                r = sd_radv_prefix_set_onlink(p->radv_prefix, val);
+                r = sd_radv_prefix_set_onlink(p->radv_prefix, r);
         else if (streq(lvalue, "AddressAutoconfiguration"))
-                r = sd_radv_prefix_set_address_autoconfiguration(p->radv_prefix, val);
-        if (r < 0)
-                return r;
+                r = sd_radv_prefix_set_address_autoconfiguration(p->radv_prefix, r);
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r, "Failed to set %s=, ignoring assignment: %m", lvalue);
+                return 0;
+        }
 
         p = NULL;
 
@@ -296,11 +297,11 @@ int config_parse_prefix_lifetime(const char *unit,
 
         r = prefix_new_static(network, filename, section_line, &p);
         if (r < 0)
-                return r;
+                return log_oom();
 
         r = parse_sec(rvalue, &usec);
         if (r < 0) {
-                log_syntax(unit, LOG_ERR, filename, line, r, "Lifetime is invalid, ignoring assignment: %s", rvalue);
+                log_syntax(unit, LOG_WARNING, filename, line, r, "Lifetime is invalid, ignoring assignment: %s", rvalue);
                 return 0;
         }
 
@@ -311,8 +312,10 @@ int config_parse_prefix_lifetime(const char *unit,
         else if (streq(lvalue, "ValidLifetimeSec"))
                 r = sd_radv_prefix_set_valid_lifetime(p->radv_prefix,
                                                       DIV_ROUND_UP(usec, USEC_PER_SEC));
-        if (r < 0)
-                return r;
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r, "Failed to set %s=, ignoring assignment: %m", lvalue);
+                return 0;
+        }
 
         p = NULL;
 
@@ -343,11 +346,11 @@ int config_parse_prefix_assign(
 
         r = prefix_new_static(network, filename, section_line, &p);
         if (r < 0)
-                return r;
+                return log_oom();
 
         r = parse_boolean(rvalue);
         if (r < 0) {
-                log_syntax(unit, LOG_ERR, filename, line, r,
+                log_syntax(unit, LOG_WARNING, filename, line, r,
                            "Failed to parse %s=, ignoring assignment: %s",
                            lvalue, rvalue);
                 return 0;
@@ -384,18 +387,19 @@ int config_parse_route_prefix(const char *unit,
 
         r = route_prefix_new_static(network, filename, section_line, &p);
         if (r < 0)
-                return r;
+                return log_oom();
 
         r = in_addr_prefix_from_string(rvalue, AF_INET6, &in6addr, &prefixlen);
         if (r < 0) {
-                log_syntax(unit, LOG_ERR, filename, line, r, "Route prefix is invalid, ignoring assignment: %s", rvalue);
+                log_syntax(unit, LOG_WARNING, filename, line, r, "Route prefix is invalid, ignoring assignment: %s", rvalue);
                 return 0;
         }
 
-        if (sd_radv_prefix_set_route_prefix(p->radv_route_prefix, &in6addr.in6, prefixlen) < 0)
-                return -EADDRNOTAVAIL;
-
-        log_syntax(unit, LOG_INFO, filename, line, r, "Found route prefix %s", rvalue);
+        r = sd_radv_prefix_set_route_prefix(p->radv_route_prefix, &in6addr.in6, prefixlen);
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r, "Failed to set route prefix, ignoring assignment: %m");
+                return 0;
+        }
 
         p = NULL;
 
@@ -425,19 +429,22 @@ int config_parse_route_prefix_lifetime(const char *unit,
 
         r = route_prefix_new_static(network, filename, section_line, &p);
         if (r < 0)
-                return r;
+                return log_oom();
 
         r = parse_sec(rvalue, &usec);
         if (r < 0) {
-                log_syntax(unit, LOG_ERR, filename, line, r,
+                log_syntax(unit, LOG_WARNING, filename, line, r,
                            "Route lifetime is invalid, ignoring assignment: %s", rvalue);
                 return 0;
         }
 
         /* a value of 0xffffffff represents infinity */
         r = sd_radv_route_prefix_set_lifetime(p->radv_route_prefix, DIV_ROUND_UP(usec, USEC_PER_SEC));
-        if (r < 0)
-                return r;
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Failed to set route lifetime, ignoring assignment: %m");
+                return 0;
+        }
 
         p = NULL;
 
@@ -456,10 +463,10 @@ static int radv_get_ip6dns(Network *network, struct in6_addr **dns,
         for (i = 0; i < network->n_dns; i++) {
                 union in_addr_union *addr;
 
-                if (network->dns[i].family != AF_INET6)
+                if (network->dns[i]->family != AF_INET6)
                         continue;
 
-                addr = &network->dns[i].address;
+                addr = &network->dns[i]->address;
 
                 if (in_addr_is_null(AF_INET6, addr) ||
                     in_addr_is_link_local(AF_INET6, addr) ||
@@ -716,14 +723,13 @@ int config_parse_radv_dns(
                 void *userdata) {
 
         Network *n = data;
-        const char *p = rvalue;
         int r;
 
         assert(filename);
         assert(lvalue);
         assert(rvalue);
 
-        for (;;) {
+        for (const char *p = rvalue;;) {
                 _cleanup_free_ char *w = NULL;
                 union in_addr_union a;
 
@@ -731,25 +737,25 @@ int config_parse_radv_dns(
                 if (r == -ENOMEM)
                         return log_oom();
                 if (r < 0) {
-                        log_syntax(unit, LOG_ERR, filename, line, r,
+                        log_syntax(unit, LOG_WARNING, filename, line, r,
                                    "Failed to extract word, ignoring: %s", rvalue);
                         return 0;
                 }
                 if (r == 0)
-                        break;
+                        return 0;
 
                 if (streq(w, "_link_local"))
                         a = IN_ADDR_NULL;
                 else {
                         r = in_addr_from_string(AF_INET6, w, &a);
                         if (r < 0) {
-                                log_syntax(unit, LOG_ERR, filename, line, r,
+                                log_syntax(unit, LOG_WARNING, filename, line, r,
                                            "Failed to parse DNS server address, ignoring: %s", w);
                                 continue;
                         }
 
                         if (in_addr_is_null(AF_INET6, &a)) {
-                                log_syntax(unit, LOG_ERR, filename, line, 0,
+                                log_syntax(unit, LOG_WARNING, filename, line, 0,
                                            "DNS server address is null, ignoring: %s", w);
                                 continue;
                         }
@@ -763,8 +769,6 @@ int config_parse_radv_dns(
                 m[n->n_router_dns++] = a.in6;
                 n->router_dns = m;
         }
-
-        return 0;
 }
 
 int config_parse_radv_search_domains(
@@ -780,30 +784,29 @@ int config_parse_radv_search_domains(
                 void *userdata) {
 
         Network *n = data;
-        const char *p = rvalue;
         int r;
 
         assert(filename);
         assert(lvalue);
         assert(rvalue);
 
-        for (;;) {
+        for (const char *p = rvalue;;) {
                 _cleanup_free_ char *w = NULL, *idna = NULL;
 
                 r = extract_first_word(&p, &w, NULL, 0);
                 if (r == -ENOMEM)
                         return log_oom();
                 if (r < 0) {
-                        log_syntax(unit, LOG_ERR, filename, line, r,
+                        log_syntax(unit, LOG_WARNING, filename, line, r,
                                    "Failed to extract word, ignoring: %s", rvalue);
                         return 0;
                 }
                 if (r == 0)
-                        break;
+                        return 0;
 
                 r = dns_name_apply_idna(w, &idna);
                 if (r < 0) {
-                        log_syntax(unit, LOG_ERR, filename, line, r,
+                        log_syntax(unit, LOG_WARNING, filename, line, r,
                                    "Failed to apply IDNA to domain name '%s', ignoring: %m", w);
                         continue;
                 } else if (r == 0)
@@ -812,14 +815,12 @@ int config_parse_radv_search_domains(
 
                 r = ordered_set_ensure_allocated(&n->router_search_domains, &string_hash_ops);
                 if (r < 0)
-                        return r;
+                        return log_oom();
 
                 r = ordered_set_consume(n->router_search_domains, TAKE_PTR(idna));
                 if (r < 0)
-                        return r;
+                        return log_oom();
         }
-
-        return 0;
 }
 
 static const char * const radv_prefix_delegation_table[_RADV_PREFIX_DELEGATION_MAX] = {
@@ -834,37 +835,10 @@ DEFINE_STRING_TABLE_LOOKUP_WITH_BOOLEAN(
                 RADVPrefixDelegation,
                 RADV_PREFIX_DELEGATION_BOTH);
 
-int config_parse_router_prefix_delegation(
-                const char *unit,
-                const char *filename,
-                unsigned line,
-                const char *section,
-                unsigned section_line,
-                const char *lvalue,
-                int ltype,
-                const char *rvalue,
-                void *data,
-                void *userdata) {
-
-        Network *network = userdata;
-        RADVPrefixDelegation d;
-
-        assert(filename);
-        assert(section);
-        assert(lvalue);
-        assert(rvalue);
-        assert(data);
-
-        d = radv_prefix_delegation_from_string(rvalue);
-        if (d < 0) {
-                log_syntax(unit, LOG_ERR, filename, line, -EINVAL, "Invalid router prefix delegation '%s', ignoring assignment.", rvalue);
-                return 0;
-        }
-
-        network->router_prefix_delegation = d;
-
-        return 0;
-}
+DEFINE_CONFIG_PARSE_ENUM(config_parse_router_prefix_delegation,
+                         radv_prefix_delegation,
+                         RADVPrefixDelegation,
+                         "Invalid router prefix delegation");
 
 int config_parse_router_preference(const char *unit,
                                    const char *filename,
@@ -891,7 +865,8 @@ int config_parse_router_preference(const char *unit,
         else if (streq(rvalue, "low"))
                 network->router_preference = SD_NDISC_PREFERENCE_LOW;
         else
-                log_syntax(unit, LOG_ERR, filename, line, -EINVAL, "Router preference '%s' is invalid, ignoring assignment: %m", rvalue);
+                log_syntax(unit, LOG_WARNING, filename, line, 0,
+                           "Invalid router preference, ignoring assignment: %s", rvalue);
 
         return 0;
 }
@@ -921,10 +896,16 @@ int config_parse_router_prefix_subnet_id(const char *unit,
         }
 
         r = safe_atoux64(rvalue, &t);
-        if (r < 0 || t > INT64_MAX) {
-                log_syntax(unit, LOG_ERR, filename, line, r,
-                                "Subnet id '%s' is invalid, ignoring assignment.",
-                                rvalue);
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Failed to parse %s=, ignoring assignment: %s",
+                           lvalue, rvalue);
+                return 0;
+        }
+        if (t > INT64_MAX) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Invalid subnet id '%s', ignoring assignment.",
+                           rvalue);
                 return 0;
         }
 

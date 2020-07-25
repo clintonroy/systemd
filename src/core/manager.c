@@ -589,6 +589,8 @@ static char** sanitize_environment(char **l) {
         /* Let's remove some environment variables that we need ourselves to communicate with our clients */
         strv_env_unset_many(
                         l,
+                        "CACHE_DIRECTORY",
+                        "CONFIGURATION_DIRECTORY",
                         "EXIT_CODE",
                         "EXIT_STATUS",
                         "INVOCATION_ID",
@@ -596,13 +598,16 @@ static char** sanitize_environment(char **l) {
                         "LISTEN_FDNAMES",
                         "LISTEN_FDS",
                         "LISTEN_PID",
+                        "LOGS_DIRECTORY",
                         "MAINPID",
                         "MANAGERPID",
                         "NOTIFY_SOCKET",
                         "PIDFILE",
                         "REMOTE_ADDR",
                         "REMOTE_PORT",
+                        "RUNTIME_DIRECTORY",
                         "SERVICE_RESULT",
+                        "STATE_DIRECTORY",
                         "WATCHDOG_PID",
                         "WATCHDOG_USEC",
                         NULL);
@@ -3685,7 +3690,7 @@ int manager_deserialize(Manager *m, FILE *f, FDSet *fds) {
                 else if ((val = startswith(l, "destroy-ipc-gid=")))
                         manager_deserialize_gid_refs_one(m, val);
                 else if ((val = startswith(l, "exec-runtime=")))
-                        exec_runtime_deserialize_one(m, val, fds);
+                        (void) exec_runtime_deserialize_one(m, val, fds);
                 else if ((val = startswith(l, "subscribed="))) {
 
                         if (strv_extend(&m->deserialized_subscribed, val) < 0)
